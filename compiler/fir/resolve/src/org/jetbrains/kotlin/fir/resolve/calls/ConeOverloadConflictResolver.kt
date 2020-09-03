@@ -7,6 +7,7 @@ package org.jetbrains.kotlin.fir.resolve.calls
 
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.fir.declarations.FirMemberDeclaration
+import org.jetbrains.kotlin.fir.declarations.isActual
 import org.jetbrains.kotlin.fir.declarations.modality
 import org.jetbrains.kotlin.fir.render
 import org.jetbrains.kotlin.fir.resolve.inference.InferenceComponents
@@ -42,9 +43,19 @@ class ConeOverloadConflictResolver(
                 candidates
 
         return chooseMaximallySpecificCandidates(
-            fixedCandidates, discriminateGenerics, discriminateAbstracts, discriminateSAMs = true, discriminateSuspendConversions = true
+            withoutActualDeclarations(fixedCandidates), discriminateGenerics, discriminateAbstracts, discriminateSAMs = true, discriminateSuspendConversions = true
         )
     }
+
+    private fun withoutActualDeclarations(candidates: Set<Candidate>): Set<Candidate> {
+        if (candidates.any { it.isActualDeclaration }) {
+            return candidates.filterNotTo(mutableSetOf()) { it.isActualDeclaration }
+        }
+        return candidates
+    }
+
+    private val Candidate.isActualDeclaration
+        get() = (symbol.fir as? FirMemberDeclaration)?.isActual == true
 
     private fun chooseCandidatesWithMostSpecificInvokeReceiver(candidates: Set<Candidate>): Set<Candidate> {
         val propertyReceiverCandidates = candidates.mapTo(mutableSetOf()) {
