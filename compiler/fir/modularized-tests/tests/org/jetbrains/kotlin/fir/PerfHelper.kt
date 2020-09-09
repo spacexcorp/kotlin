@@ -48,7 +48,9 @@ internal class PerfHelper {
 
     private fun parsePerfOutput(): List<MetricsRow> {
         return perfOutputFile.readLines().mapNotNull { line ->
+            println(line)
             val parts = line.split('\t')
+            if (parts.size < 4) return@mapNotNull null
             val threadName = parts[threadNameCol]
             if (threadName.isNotBlank()) {
                 MetricsRow(parts[metricNameCol], threadName, parts[metricValueCol], parts[unitCol].takeUnless { it.isBlank() })
