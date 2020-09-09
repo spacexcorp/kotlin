@@ -17,6 +17,7 @@ import org.jetbrains.kotlin.cli.common.toBooleanLenient
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.cli.jvm.compiler.TopDownAnalyzerFacadeForJVM
+import org.jetbrains.kotlin.fir.PerfHelper.MetricsRow
 import org.jetbrains.kotlin.fir.analysis.FirCheckersResolveProcessor
 import org.jetbrains.kotlin.fir.builder.RawFirBuilder
 import org.jetbrains.kotlin.fir.declarations.FirFile
@@ -53,12 +54,16 @@ private val ASYNC_PROFILER_START_CMD = System.getProperty("fir.bench.use.async.p
 private val ASYNC_PROFILER_STOP_CMD = System.getProperty("fir.bench.use.async.profiler.cmd.stop")
 private val PROFILER_SNAPSHOT_DIR = System.getProperty("fir.bench.snapshot.dir") ?: "tmp/snapshots"
 
+private val USE_PERF_STAT = System.getProperty("fir.bench.use.perf.stat", "true").toBooleanLenient()!!
+
 class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
 
     private lateinit var dump: MultiModuleHtmlFirDump
     private lateinit var bench: FirResolveBench
     private var bestStatistics: FirResolveBench.TotalStatistics? = null
     private var bestPass: Int = 0
+
+    private val perfHelper = if (USE_PERF_STAT) PerfHelper() else null
 
     private val asyncProfiler = if (ASYNC_PROFILER_LIB != null) {
         try {
@@ -92,7 +97,6 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
     private fun runAnalysis(moduleData: ModuleData, environment: KotlinCoreEnvironment) {
         val project = environment.project
         val ktFiles = environment.getSourceFiles().sortedBy { it.virtualFilePath }
-
 
         val scope = GlobalSearchScope.filesScope(project, ktFiles.map { it.virtualFile })
             .uniteWith(TopDownAnalyzerFacadeForJVM.AllJavaSourcesInProjectScope(project))
@@ -134,6 +138,29 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         val disambiguatedName = moduleData.disambiguatedName()
         dumpFir(disambiguatedName, moduleData, firFiles)
         dumpFirHtml(disambiguatedName, moduleData, firFiles)
+    }
+
+    private fun PerfHelper.stopAndReport() {
+        val result = this.stop()
+        fun buildReport(out: Appendable, metrics: List<MetricsRow>) {
+            printTable(out) {
+                row("Name", "Value")
+                separator()
+                metrics.forEach {
+                    row {
+                        cell(it.metricName, align = LEFT)
+                        cell(buildString {
+                            append(it.value)
+                            if (it.units != null) {
+                                append(" ")
+                                append(it.units)
+                            }
+                        })
+                    }
+                }
+            }
+        }
+        buildReport(System.out, result.metrics.filter { it.threadName.startsWith("AWT-EventQueue") })
     }
 
     private fun dumpFir(disambiguatedName: String, moduleData: ModuleData, firFiles: List<FirFile>) {
@@ -187,9 +214,11 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         if (DUMP_FIR) dump = MultiModuleHtmlFirDump(File(FIR_HTML_DUMP_PATH))
         System.gc()
         executeAsyncProfilerCommand(ASYNC_PROFILER_START_CMD, pass)
+        perfHelper?.start()
     }
 
     override fun afterPass(pass: Int) {
+        perfHelper?.stopAndReport()
         val statistics = bench.getTotalStatistics()
         statistics.report(System.out, "Pass $pass")
 
