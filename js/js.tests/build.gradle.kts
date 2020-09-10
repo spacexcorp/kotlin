@@ -167,11 +167,11 @@ projectTest(parallel = true) {
     inputs.dir(rootDir.resolve("libraries/stdlib/api/js"))
     inputs.dir(rootDir.resolve("libraries/stdlib/api/js-v1"))
 
-    useJUnitPlatform()
-    distribution {
-        enabled.set(true)
-        maxRemoteExecutors.set(0)
-    }
+//    useJUnitPlatform()
+//    distribution {
+//        enabled.set(true)
+//        maxRemoteExecutors.set(0)
+//    }
 }
 
 projectTest("jsTest", true) {
