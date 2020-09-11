@@ -19,7 +19,7 @@ val runtimePerfLib by configurations.creating {
         attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named("linux"))
         attribute(MachineArchitecture.ARCHITECTURE_ATTRIBUTE, objects.named(MachineArchitecture.X86_64))
         attribute(Usage.USAGE_ATTRIBUTE, objects.named("native-runtime"))
-        attribute(CppBinary.OPTIMIZED_ATTRIBUTE, true)
+        attribute(CppBinary.OPTIMIZED_ATTRIBUTE, false)
     }
 }
 
