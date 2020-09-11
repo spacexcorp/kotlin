@@ -17,7 +17,6 @@ import org.jetbrains.kotlin.cli.common.toBooleanLenient
 import org.jetbrains.kotlin.cli.jvm.compiler.EnvironmentConfigFiles
 import org.jetbrains.kotlin.cli.jvm.compiler.KotlinCoreEnvironment
 import org.jetbrains.kotlin.cli.jvm.compiler.TopDownAnalyzerFacadeForJVM
-import org.jetbrains.kotlin.fir.PerfHelper.MetricsRow
 import org.jetbrains.kotlin.fir.analysis.FirCheckersResolveProcessor
 import org.jetbrains.kotlin.fir.builder.RawFirBuilder
 import org.jetbrains.kotlin.fir.declarations.FirFile
@@ -28,10 +27,15 @@ import org.jetbrains.kotlin.fir.resolve.firProvider
 import org.jetbrains.kotlin.fir.resolve.providers.impl.FirProviderImpl
 import org.jetbrains.kotlin.fir.resolve.transformers.createAllCompilerResolveProcessors
 import org.jetbrains.kotlin.fir.scopes.ProcessorAction
+import org.jetbrains.kotlin.perfstat.PerfStat
+import org.jetbrains.kotlin.perfstat.StatResult
 import java.io.File
 import java.io.FileOutputStream
 import java.io.PrintStream
 import java.lang.management.ManagementFactory
+import kotlin.reflect.KProperty1
+import kotlin.reflect.full.createType
+import kotlin.reflect.full.memberProperties
 
 
 private const val FAIL_FAST = true
@@ -55,6 +59,7 @@ private val ASYNC_PROFILER_STOP_CMD = System.getProperty("fir.bench.use.async.pr
 private val PROFILER_SNAPSHOT_DIR = System.getProperty("fir.bench.snapshot.dir") ?: "tmp/snapshots"
 
 private val USE_PERF_STAT = System.getProperty("fir.bench.use.perf.stat", "true").toBooleanLenient()!!
+private val PERF_LIB_PATH = System.getProperty("fir.bench.perf.lib")
 
 class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
 
@@ -63,7 +68,9 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
     private var bestStatistics: FirResolveBench.TotalStatistics? = null
     private var bestPass: Int = 0
 
-    private val perfHelper = if (USE_PERF_STAT) PerfHelper() else null
+    private val perfHelper = if (USE_PERF_STAT) PerfStat().also {
+        it.init(PERF_LIB_PATH)
+    } else null
 
     private val asyncProfiler = if (ASYNC_PROFILER_LIB != null) {
         try {
@@ -112,6 +119,8 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         }
 
         val firProvider = session.firProvider as FirProviderImpl
+
+        perfHelper?.resume()
         val firFiles = if (USE_LIGHT_TREE) {
             val lightTree2Fir = LightTree2Fir(session, firProvider.kotlinScopeProvider, stubMode = false)
 
@@ -130,9 +139,10 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
             bench.buildFiles(builder, ktFiles)
         }
 
-        //println("Raw FIR up, files: ${firFiles.size}")
 
         bench.processFiles(firFiles, processors)
+        perfHelper?.pause()
+
         createMemoryDump(moduleData)
 
         val disambiguatedName = moduleData.disambiguatedName()
@@ -140,27 +150,32 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         dumpFirHtml(disambiguatedName, moduleData, firFiles)
     }
 
-    private fun PerfHelper.stopAndReport() {
-        val result = this.stop()
-        fun buildReport(out: Appendable, metrics: List<MetricsRow>) {
+    private fun PerfStat.report() {
+        val result = this.retrieve()
+
+        fun buildReport(out: Appendable, metrics: List<Pair<String, Long>>) {
             printTable(out) {
                 row("Name", "Value")
                 separator()
                 metrics.forEach {
                     row {
-                        cell(it.metricName, align = LEFT)
+                        cell(it.first, align = LEFT)
                         cell(buildString {
-                            append(it.value)
-                            if (it.units != null) {
-                                append(" ")
-                                append(it.units)
-                            }
+                            append(it.second)
                         })
                     }
                 }
             }
         }
-        buildReport(System.out, result.metrics.filter { it.threadName.startsWith("AWT-EventQueue") })
+
+        val metrics =
+            result::class.memberProperties
+                .filter { it.returnType == Long::class.createType() }
+                .map {
+                    it as KProperty1<StatResult, Long>
+                    it.name to it.get(result)
+                }
+        buildReport(System.out, metrics)
     }
 
     private fun dumpFir(disambiguatedName: String, moduleData: ModuleData, firFiles: List<FirFile>) {
@@ -178,7 +193,7 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         val baseName = qualifiedName
         var disambiguatedName = baseName
         var counter = 1
-        while(!dumpedModules.add(disambiguatedName)) {
+        while (!dumpedModules.add(disambiguatedName)) {
             disambiguatedName = "$baseName.${counter++}"
         }
         return disambiguatedName
@@ -214,13 +229,14 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         if (DUMP_FIR) dump = MultiModuleHtmlFirDump(File(FIR_HTML_DUMP_PATH))
         System.gc()
         executeAsyncProfilerCommand(ASYNC_PROFILER_START_CMD, pass)
-        perfHelper?.start()
     }
 
     override fun afterPass(pass: Int) {
-        perfHelper?.stopAndReport()
         val statistics = bench.getTotalStatistics()
         statistics.report(System.out, "Pass $pass")
+
+        perfHelper?.report()
+        perfHelper?.reset()
 
         saveReport(pass, statistics)
         if (statistics.totalTime < (bestStatistics?.totalTime ?: Long.MAX_VALUE)) {
@@ -271,6 +287,9 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
     }
 
     fun testTotalKotlin() {
+
+        perfHelper?.open()
+
         for (i in 0 until PASSES) {
             println("Pass $i")
 
@@ -278,6 +297,8 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
             runTestOnce(i)
         }
         afterAllPasses()
+
+        perfHelper?.close()
     }
 
     private fun createMemoryDump(moduleData: ModuleData) {

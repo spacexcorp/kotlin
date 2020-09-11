@@ -8,6 +8,22 @@ plugins {
     id("jps-compatible")
 }
 
+repositories {
+    mavenLocal()
+    maven {
+        url = uri("${rootDir}/../PerfStatJvm/build/dist")
+    }
+}
+val runtimePerfLib by configurations.creating {
+    attributes {
+        attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named("linux"))
+        attribute(MachineArchitecture.ARCHITECTURE_ATTRIBUTE, objects.named(MachineArchitecture.X86_64))
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named("native-runtime"))
+        attribute(CppBinary.OPTIMIZED_ATTRIBUTE, true)
+    }
+}
+
+
 dependencies {
     Platform[193].orLower {
         testCompileOnly(intellijDep()) { includeJars("openapi", rootProject = rootProject) }
@@ -40,6 +56,10 @@ dependencies {
     if (asyncProfilerClasspath != null) {
         testRuntimeOnly(files(*asyncProfilerClasspath.split(File.pathSeparatorChar).toTypedArray()))
     }
+
+    testCompile("org.jetbrains.kotlin.perfstatjvm:perfstatjvm:1.0-SNAPSHOT")
+
+    runtimePerfLib("org.jetbrains.kotlin.perfstatjvm:perf-event-lib:1.0-SNAPSHOT")
 }
 
 sourceSets {
@@ -54,6 +74,9 @@ projectTest {
     maxHeapSize = "8g"
     dependsOn(":dist")
 
+    systemProperty("fir.bench.perf.lib", runtimePerfLib.singleFile.absolutePath)
+
+    println("-Dfir.bench.perf.lib=${runtimePerfLib.singleFile.absolutePath}")
     run {
         val argsExt = project.findProperty("fir.modularized.jvm.args") as? String
         if (argsExt != null) {

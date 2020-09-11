@@ -15,6 +15,7 @@ import org.jetbrains.kotlin.fir.expressions.FirExpression
 import org.jetbrains.kotlin.fir.expressions.builder.buildArgumentList
 import org.jetbrains.kotlin.fir.expressions.impl.FirExpressionStub
 import org.jetbrains.kotlin.fir.expressions.impl.FirNoReceiverExpression
+import org.jetbrains.kotlin.fir.render
 import org.jetbrains.kotlin.fir.resolve.BodyResolveComponents
 import org.jetbrains.kotlin.fir.resolve.DoubleColonLHS
 import org.jetbrains.kotlin.fir.resolve.inference.PostponedResolvedAtom
@@ -52,6 +53,8 @@ data class CallInfo(
     val stubReceiver: FirExpression? = null
 ) {
     val arguments: List<FirExpression> get() = argumentList.arguments
+
+    fun debugRender() = "$callKind ${explicitReceiver?.render()} . $name (${argumentList.render()}), maybeQ = $isPotentialQualifierPart"
 
     val argumentCount get() = arguments.size
 
