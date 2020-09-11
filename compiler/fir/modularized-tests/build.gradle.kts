@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.cli.common.toBooleanLenient
+
 /*
  * Copyright 2000-2018 JetBrains s.r.o. Use of this source code is governed by the Apache 2.0 license
  * that can be found in the license/LICENSE.txt file.
@@ -19,10 +21,11 @@ val runtimePerfLib by configurations.creating {
         attribute(OperatingSystemFamily.OPERATING_SYSTEM_ATTRIBUTE, objects.named("linux"))
         attribute(MachineArchitecture.ARCHITECTURE_ATTRIBUTE, objects.named(MachineArchitecture.X86_64))
         attribute(Usage.USAGE_ATTRIBUTE, objects.named("native-runtime"))
-        attribute(CppBinary.OPTIMIZED_ATTRIBUTE, false)
+        attribute(CppBinary.OPTIMIZED_ATTRIBUTE, true)
     }
 }
 
+val usePerfStat = (project.findProperty("fir.bench.use.perf.stat") as? String)?.toBooleanLenient() == true
 
 dependencies {
     Platform[193].orLower {
@@ -59,7 +62,9 @@ dependencies {
 
     testCompile("org.jetbrains.kotlin.perfstatjvm:perfstatjvm:1.0-SNAPSHOT")
 
-    runtimePerfLib("org.jetbrains.kotlin.perfstatjvm:perf-event-lib:1.0-SNAPSHOT")
+    if (usePerfStat) {
+        runtimePerfLib("org.jetbrains.kotlin.perfstatjvm:perf-event-lib:1.0-SNAPSHOT")
+    }
 }
 
 sourceSets {
@@ -74,9 +79,10 @@ projectTest {
     maxHeapSize = "8g"
     dependsOn(":dist")
 
-    systemProperty("fir.bench.perf.lib", runtimePerfLib.singleFile.absolutePath)
-
-    println("-Dfir.bench.perf.lib=${runtimePerfLib.singleFile.absolutePath}")
+    if (usePerfStat) {
+        systemProperty("fir.bench.perf.lib", runtimePerfLib.singleFile.absolutePath)
+        println("-Dfir.bench.perf.lib=${runtimePerfLib.singleFile.absolutePath}")
+    }
     run {
         val argsExt = project.findProperty("fir.modularized.jvm.args") as? String
         if (argsExt != null) {
