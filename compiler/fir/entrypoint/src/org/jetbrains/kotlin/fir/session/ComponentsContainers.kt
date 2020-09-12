@@ -42,7 +42,7 @@ fun FirSession.registerCommonComponents() {
  * Resolve components which are same on all platforms
  */
 @OptIn(SessionConfiguration::class)
-fun FirModuleBasedSession.registerResolveComponents() {
+fun FirSession.registerResolveComponents() {
     register(FirQualifierResolver::class, FirQualifierResolverImpl(this))
     register(FirTypeResolver::class, FirTypeResolverImpl(this))
     register(CheckersComponent::class, CheckersComponent())
@@ -52,7 +52,7 @@ fun FirModuleBasedSession.registerResolveComponents() {
  * Resolve components which have specific implementations on JVM
  */
 @OptIn(SessionConfiguration::class)
-fun FirModuleBasedSession.registerJavaSpecificComponents() {
+fun FirSession.registerJavaSpecificComponents() {
     register(FirVisibilityChecker::class, FirJavaVisibilityChecker)
     register(ConeCallConflictResolverFactory::class, JvmCallConflictResolverFactory)
     register(FirEffectiveVisibilityResolver::class, FirJvmEffectiveVisibilityResolver(this))
