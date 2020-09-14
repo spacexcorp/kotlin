@@ -89,6 +89,7 @@ class FirSealedClassInheritorsTransformer : FirTransformer<Nothing?>() {
         private fun extractClassFromTypeRef(symbolProvider: FirSymbolProvider, typeRef: FirTypeRef): FirRegularClass? {
             val lookupTag = (typeRef.coneType as? ConeLookupTagBasedType)?.lookupTag ?: return null
             val classLikeSymbol: FirClassifierSymbol<*> = symbolProvider.getSymbolByLookupTag(lookupTag) ?: return null
+            classLikeSymbol.ensureResolved(FirResolvePhase.SUPER_TYPES, symbolProvider.session)
             return when (classLikeSymbol) {
                 is FirRegularClassSymbol -> classLikeSymbol.fir
                 is FirTypeAliasSymbol -> extractClassFromTypeRef(symbolProvider, classLikeSymbol.fir.expandedTypeRef)
