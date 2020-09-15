@@ -47,6 +47,10 @@ internal abstract class AbstractFirIdeDiagnosticsCollector(
         reporter = Reporter()
     }
 
+    override fun beforeCollecting() {
+        checkCanceled()
+    }
+
     override fun getCollectedDiagnostics(): Iterable<FirDiagnostic<*>> {
         // Not necessary in IDE
         return emptyList()
