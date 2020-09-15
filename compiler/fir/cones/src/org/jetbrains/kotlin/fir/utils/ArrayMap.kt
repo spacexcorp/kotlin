@@ -70,7 +70,7 @@ internal class OneElementArrayMap<T : Any>(val value: T, val index: Int) : Array
 
 internal class ArrayMapImpl<T : Any> : ArrayMap<T>() {
     companion object {
-        private const val DEFAULT_SIZE = 20
+        private const val DEFAULT_SIZE = 25
         private const val INCREASE_K = 2
     }
 
