@@ -44,7 +44,12 @@ fun checkFirProvidersConsistency(firFiles: List<FirFile>) {
 private data class FailureInfo(val transformer: KClass<*>, val throwable: Throwable, val file: String)
 data class ErrorTypeReport(val report: String, var count: Int = 0)
 
-class FirResolveBench(val withProgress: Boolean) {
+abstract class BenchListener {
+    abstract fun before()
+    abstract fun after(stageClass: KClass<*>)
+}
+
+class FirResolveBench(val withProgress: Boolean, val listener: BenchListener? = null) {
     data class TotalStatistics(
         val unresolvedTypes: Int,
         val resolvedTypes: Int,
@@ -105,6 +110,7 @@ class FirResolveBench(val withProgress: Boolean) {
         builder: RawFirBuilder,
         ktFiles: List<KtFile>
     ): List<FirFile> {
+        listener?.before()
         return ktFiles.map { file ->
             val before = vmStateSnapshot()
             val firFile: FirFile
@@ -118,6 +124,7 @@ class FirResolveBench(val withProgress: Boolean) {
             totalLines += StringUtil.countNewLines(file.text)
             firFile
         }.also {
+            listener?.after(builder::class)
             totalTime = timePerTransformer.values.sumByLong { it.time }
         }
     }
@@ -126,6 +133,7 @@ class FirResolveBench(val withProgress: Boolean) {
         builder: LightTree2Fir,
         files: List<File>
     ): List<FirFile> {
+        listener?.before()
         return files.map { file ->
             val before = vmStateSnapshot()
             val firFile: FirFile
@@ -141,6 +149,7 @@ class FirResolveBench(val withProgress: Boolean) {
             totalLines += StringUtil.countNewLines(code)
             firFile
         }.also {
+            listener?.after(builder::class)
             totalTime = timePerTransformer.values.sumByLong { it.time }
         }
     }
@@ -165,6 +174,7 @@ class FirResolveBench(val withProgress: Boolean) {
 
     private fun runStage(processor: FirTransformerBasedResolveProcessor, firFileSequence: Sequence<FirFile>) {
         val transformer = processor.transformer
+        listener?.before()
         for (firFile in firFileSequence) {
             processWithTimeMeasure(
                 transformer::class,
@@ -180,6 +190,7 @@ class FirResolveBench(val withProgress: Boolean) {
                 }
             }
         }
+        listener?.after(transformer::class)
     }
 
     private fun runStage(processor: FirGlobalResolveProcessor) {

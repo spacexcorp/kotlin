@@ -33,9 +33,7 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.PrintStream
 import java.lang.management.ManagementFactory
-import kotlin.reflect.KProperty1
-import kotlin.reflect.full.createType
-import kotlin.reflect.full.memberProperties
+import kotlin.reflect.KClass
 
 
 private const val FAIL_FAST = true
@@ -61,6 +59,22 @@ private val PROFILER_SNAPSHOT_DIR = System.getProperty("fir.bench.snapshot.dir")
 private val USE_PERF_STAT = System.getProperty("fir.bench.use.perf.stat", "true").toBooleanLenient()!!
 private val PERF_LIB_PATH = System.getProperty("fir.bench.perf.lib")
 
+private class PerfBenchListener(val helper: PerfStat) : BenchListener() {
+
+    val statByStage = mutableMapOf<KClass<*>, StatResult>()
+    val total get() = statByStage.values.reduce { acc, statResult -> acc.plus(statResult) }
+
+    override fun before() {
+        helper.resume()
+    }
+
+    override fun after(stageClass: KClass<*>) {
+        helper.pause()
+        statByStage[stageClass] = helper.retrieve()
+        helper.reset()
+    }
+}
+
 class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
 
     private lateinit var dump: MultiModuleHtmlFirDump
@@ -71,6 +85,8 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
     private val perfHelper = if (USE_PERF_STAT) PerfStat().also {
         it.init(PERF_LIB_PATH)
     } else null
+
+    private val perfBenchListener = perfHelper?.let { PerfBenchListener(it) }
 
     private val asyncProfiler = if (ASYNC_PROFILER_LIB != null) {
         try {
@@ -120,7 +136,6 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
 
         val firProvider = session.firProvider as FirProviderImpl
 
-        perfHelper?.resume()
         val firFiles = if (USE_LIGHT_TREE) {
             val lightTree2Fir = LightTree2Fir(session, firProvider.kotlinScopeProvider, stubMode = false)
 
@@ -141,7 +156,6 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
 
 
         bench.processFiles(firFiles, processors)
-        perfHelper?.pause()
 
         createMemoryDump(moduleData)
 
@@ -150,32 +164,41 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         dumpFirHtml(disambiguatedName, moduleData, firFiles)
     }
 
-    private fun PerfStat.report() {
-        val result = this.retrieve()
+    private fun reportPerfStat(perfBenchListener: PerfBenchListener) {
 
-        fun buildReport(out: Appendable, metrics: List<Pair<String, Long>>) {
-            printTable(out) {
-                row("Name", "Value")
-                separator()
-                metrics.forEach {
-                    row {
-                        cell(it.first, align = LEFT)
+
+        fun buildReport(out: Appendable) {
+
+            fun RTableContext.buildRow(stageName: String, metrics: List<StatResult.Metric>) {
+                row {
+                    cell(stageName, align = LEFT)
+                    for (metric in metrics) {
+                        if (metric !is StatResult.LongMetric) continue
                         cell(buildString {
-                            append(it.second)
+                            append(metric.value)
                         })
                     }
                 }
             }
+            printTable(out) {
+                row {
+                    cell("Stage", align = LEFT)
+                    for (metric in perfBenchListener.total.metrics) {
+                        if (metric !is StatResult.LongMetric) continue
+                        cell(metric.name)
+                    }
+                }
+                separator()
+                for ((stage, result) in perfBenchListener.statByStage) {
+                    buildRow(stage.simpleName!!, result.metrics)
+                }
+                separator()
+                buildRow("Total", perfBenchListener.total.metrics)
+            }
         }
 
-        val metrics =
-            result::class.memberProperties
-                .filter { it.returnType == Long::class.createType() }
-                .map {
-                    it as KProperty1<StatResult, Long>
-                    it.name to it.get(result)
-                }
-        buildReport(System.out, metrics)
+
+        buildReport(System.out)
     }
 
     private fun dumpFir(disambiguatedName: String, moduleData: ModuleData, firFiles: List<FirFile>) {
@@ -234,8 +257,8 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
     override fun afterPass(pass: Int) {
         val statistics = bench.getTotalStatistics()
         statistics.report(System.out, "Pass $pass")
+        perfBenchListener?.let { reportPerfStat(it) }
 
-        perfHelper?.report()
         perfHelper?.reset()
 
         saveReport(pass, statistics)
@@ -293,7 +316,7 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         for (i in 0 until PASSES) {
             println("Pass $i")
 
-            bench = FirResolveBench(withProgress = false)
+            bench = FirResolveBench(withProgress = false, perfBenchListener)
             runTestOnce(i)
         }
         afterAllPasses()
