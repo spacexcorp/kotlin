@@ -6,7 +6,6 @@
 package org.jetbrains.kotlin.idea.run
 
 import com.intellij.execution.Location
-import com.intellij.execution.PsiLocation
 import com.intellij.execution.actions.ConfigurationContext
 import com.intellij.execution.actions.ConfigurationFromContext
 import com.intellij.execution.junit.InheritorChooser
@@ -87,7 +86,12 @@ abstract class AbstractKotlinMultiplatformTestMethodGradleConfigurationProducer 
                 .map { extTask -> extTask.targetName }
                 .distinct()
 
-        mppTestTasksChooser.multiplatformChooseTasks(context.project, dataContext, classes.asList()) { tasks ->
+        val contextualSuffix = if (context.location is PsiMemberParameterizedLocation)
+            (context.location as PsiMemberParameterizedLocation).paramSetName.trim('[', ']')
+        else
+            null
+
+        mppTestTasksChooser.multiplatformChooseTasks(context.project, dataContext, classes.asList(), contextualSuffix) { tasks ->
             val configuration = fromContext.configuration as ExternalSystemRunConfiguration
             val settings = configuration.settings
 
@@ -95,7 +99,7 @@ abstract class AbstractKotlinMultiplatformTestMethodGradleConfigurationProducer 
                 var filters = createTestFilterFrom(context.location, it, psiMethod, true)
                 if (context.location is PsiMemberParameterizedLocation) {
                     availableTargets.forEach { targetName ->
-                        filters = filters.replace("[*$targetName*]", "")
+                        filters = filters.substringBefore("[*$targetName")
                     }
                 }
                 filters
