@@ -97,10 +97,8 @@ abstract class AbstractKotlinMultiplatformTestMethodGradleConfigurationProducer 
 
             val result = settings.applyTestConfiguration(context.module, tasks, *classes) {
                 var filters = createTestFilterFrom(context.location, it, psiMethod, true)
-                if (context.location is PsiMemberParameterizedLocation) {
-                    availableTargets.forEach { targetName ->
-                        filters = filters.substringBefore("[*$targetName")
-                    }
+                if (context.location is PsiMemberParameterizedLocation && contextualSuffix != null) {
+                    filters = filters.replace("[*$contextualSuffix*]", "")
                 }
                 filters
             }
