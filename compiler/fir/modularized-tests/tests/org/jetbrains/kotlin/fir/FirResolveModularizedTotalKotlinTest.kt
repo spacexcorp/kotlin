@@ -164,7 +164,7 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         dumpFirHtml(disambiguatedName, moduleData, firFiles)
     }
 
-    private fun reportPerfStat(perfBenchListener: PerfBenchListener) {
+    private fun reportPerfStat(perfBenchListener: PerfBenchListener, statistics: FirResolveBench.TotalStatistics, pass: Int) {
 
 
         fun buildReport(out: Appendable) {
@@ -199,6 +199,21 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
 
 
         buildReport(System.out)
+
+        PrintStream(
+            FileOutputStream(
+                reportDir().resolve("perf-$reportDateStr.log"),
+                true
+            )
+        ).use { stream ->
+            stream.println("====== Pass $pass ======")
+            statistics.reportTimings(stream)
+            buildReport(stream)
+
+            stream.println()
+            stream.println()
+        }
+
     }
 
     private fun dumpFir(disambiguatedName: String, moduleData: ModuleData, firFiles: List<FirFile>) {
@@ -257,7 +272,7 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
     override fun afterPass(pass: Int) {
         val statistics = bench.getTotalStatistics()
         statistics.report(System.out, "Pass $pass")
-        perfBenchListener?.let { reportPerfStat(it) }
+        perfBenchListener?.let { reportPerfStat(it, statistics, pass) }
 
         perfHelper?.reset()
 

@@ -416,6 +416,24 @@ fun FirResolveBench.TotalStatistics.reportErrors(stream: PrintStream) {
     }
 }
 
+fun FirResolveBench.TotalStatistics.reportTimings(stream: PrintStream) {
+    printTable(stream) {
+        row {
+            cell("Stage", LEFT)
+            cells("Time", "Time per file", "Files: OK/E/T", "CPU", "User", "GC", "GC count", "L/S")
+        }
+        separator()
+        timePerTransformer.forEach { (transformer, measure) ->
+            printMeasureAsTable(measure, this@reportTimings, transformer)
+        }
+
+        if (timePerTransformer.keys.isNotEmpty()) {
+            separator()
+            printMeasureAsTable(totalMeasure, this@reportTimings, "Total time")
+        }
+    }
+}
+
 fun FirResolveBench.TotalStatistics.report(stream: PrintStream, header: String) {
     with(stream) {
         infix fun Int.percentOf(other: Int): String {
@@ -432,21 +450,7 @@ fun FirResolveBench.TotalStatistics.report(stream: PrintStream, header: String) 
         println("Erroneously resolved implicit types: $implicitTypes (${implicitTypes percentOf resolvedTypes} of resolved)")
         println("Unique error types: $uniqueErrorTypes")
 
-        printTable(stream) {
-            row {
-                cell("Stage", LEFT)
-                cells("Time", "Time per file", "Files: OK/E/T", "CPU", "User", "GC", "GC count", "L/S")
-            }
-            separator()
-            timePerTransformer.forEach { (transformer, measure) ->
-                printMeasureAsTable(measure, this@report, transformer)
-            }
-
-            if (timePerTransformer.keys.isNotEmpty()) {
-                separator()
-                printMeasureAsTable(totalMeasure, this@report, "Total time")
-            }
-        }
+        this@report.reportTimings(stream)
     }
 }
 
