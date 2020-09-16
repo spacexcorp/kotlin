@@ -35,7 +35,7 @@ class MultiplatformTestTasksChooser : TestTasksChooser() {
         handler: (List<Map<SourcePath, TestTasks>>) -> Unit
     ) {
         val consumer = Consumer<List<Map<SourcePath, TestTasks>>> { handler(it) }
-        val testTasks = resolveTestTasks(elements, contextualFilter(contextualSuffix ?: ""))
+        val testTasks = resolveTestTasks(elements, contextualFilter(contextualSuffix ))
 
         when {
             testTasks.isEmpty() -> super.chooseTestTasks(project, dataContext, elements, consumer)
@@ -44,8 +44,9 @@ class MultiplatformTestTasksChooser : TestTasksChooser() {
         }
     }
 
-    private fun contextualFilter(contextualSuffix: String): TaskFilter {
-        val parts = contextualSuffix.split(", ")
+    private fun contextualFilter(contextualSuffix: String?): TaskFilter {
+        val parts = (contextualSuffix ?: "").split(", ").filter { it.isNotEmpty() }
+
         if (parts.isEmpty()) {
             return { _ -> true }
         }
