@@ -71,7 +71,7 @@ private class PerfBenchListener(val helper: PerfStat) : BenchListener() {
 
     override fun after(stageClass: KClass<*>) {
         helper.pause()
-        statByStage[stageClass] = helper.retrieve()
+        statByStage.merge(stageClass, helper.retrieve()) { a, b -> a.plus(b) }
         helper.reset()
     }
 }
@@ -98,7 +98,7 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
         it.init(PERF_LIB_PATH)
     } else null
 
-    private val perfBenchListener = perfHelper?.let { PerfBenchListener(it) }
+    private var perfBenchListener: PerfBenchListener? = null
 
     private val asyncProfiler = if (ASYNC_PROFILER_LIB != null) {
         try {
@@ -348,7 +348,7 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
 
         for (i in 0 until PASSES) {
             println("Pass $i")
-
+            perfBenchListener = perfHelper?.let { PerfBenchListener(it) }
             bench = FirResolveBench(withProgress = false, perfBenchListener)
             runTestOnce(i)
         }
