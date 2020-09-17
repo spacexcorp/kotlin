@@ -29,7 +29,6 @@ import org.jetbrains.kotlin.fir.resolve.transformers.createAllCompilerResolvePro
 import org.jetbrains.kotlin.fir.scopes.ProcessorAction
 import org.jetbrains.kotlin.perfstat.PerfStat
 import org.jetbrains.kotlin.perfstat.StatResult
-import sun.management.VMManagement
 import java.io.File
 import java.io.FileOutputStream
 import java.io.PrintStream
@@ -74,17 +73,6 @@ private class PerfBenchListener(val helper: PerfStat) : BenchListener() {
         statByStage.merge(stageClass, helper.retrieve()) { a, b -> a.plus(b) }
         helper.reset()
     }
-}
-
-private fun getPID(): Int {
-    val runtime = ManagementFactory.getRuntimeMXBean()
-    val jvm = runtime.javaClass.getDeclaredField("jvm")
-    jvm.isAccessible = true
-    val mgmt = jvm[runtime] as VMManagement
-    val pidMethod = mgmt.javaClass.getDeclaredMethod("getProcessId")
-    pidMethod.isAccessible = true
-
-    return pidMethod.invoke(mgmt) as Int
 }
 
 class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
@@ -334,12 +322,6 @@ class FirResolveModularizedTotalKotlinTest : AbstractModularizedTest() {
             stream.println()
             stream.println()
         }
-    }
-
-    override fun setUp() {
-        super.setUp()
-
-        Runtime.getRuntime().exec("taskset -cp 2-11 ${getPID()}").waitFor()
     }
 
     fun testTotalKotlin() {
