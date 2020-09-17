@@ -13,6 +13,7 @@ import org.jetbrains.kotlin.descriptors.ClassDescriptor
 import org.jetbrains.kotlin.descriptors.SimpleFunctionDescriptor
 import org.jetbrains.kotlin.descriptors.findClassAcrossModuleDependencies
 import org.jetbrains.kotlin.incremental.components.NoLookupLocation
+import org.jetbrains.kotlin.ir.ObsoleteDescriptorBasedAPI
 import org.jetbrains.kotlin.ir.declarations.IrFunction
 import org.jetbrains.kotlin.ir.declarations.IrModuleFragment
 import org.jetbrains.kotlin.ir.declarations.IrPackageFragment
@@ -22,11 +23,11 @@ import org.jetbrains.kotlin.ir.symbols.IrFunctionSymbol
 import org.jetbrains.kotlin.ir.symbols.IrSimpleFunctionSymbol
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.classOrNull
+import org.jetbrains.kotlin.ir.types.toKotlinType
 import org.jetbrains.kotlin.ir.util.*
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.resolve.calls.components.isVararg
-import org.jetbrains.kotlin.types.KotlinType
 import org.jetbrains.kotlin.util.OperatorNameConventions
 import org.jetbrains.kotlin.util.capitalizeDecapitalize.toLowerCaseAsciiOnly
 
@@ -226,32 +227,35 @@ open class BuiltinSymbolsBase(protected val irBuiltIns: IrBuiltIns, protected va
     val mutableListIterator = symbolTable.referenceClass(builtIns.mutableListIterator)
     val comparable = symbolTable.referenceClass(builtIns.comparable)
 
-    private val binaryOperatorCache = mutableMapOf<Triple<Name, KotlinType, KotlinType>, IrSimpleFunctionSymbol>()
+    private val binaryOperatorCache = mutableMapOf<Triple<Name, IrType, IrType>, IrSimpleFunctionSymbol>()
 
-    fun getBinaryOperator(name: Name, lhsType: KotlinType, rhsType: KotlinType): IrSimpleFunctionSymbol {
+    @OptIn(ObsoleteDescriptorBasedAPI::class)
+    fun getBinaryOperator(name: Name, lhsType: IrType, rhsType: IrType): IrSimpleFunctionSymbol {
         val key = Triple(name, lhsType, rhsType)
+        val rhsKotlinType = rhsType.toKotlinType()
         return binaryOperatorCache.getOrPut(key) {
             symbolTable.referenceSimpleFunction(
-                lhsType.memberScope.getContributedFunctions(name, NoLookupLocation.FROM_BACKEND)
-                    .first { it.valueParameters.size == 1 && it.valueParameters[0].type == rhsType }
+                lhsType.toKotlinType().memberScope.getContributedFunctions(name, NoLookupLocation.FROM_BACKEND)
+                    .first { it.valueParameters.size == 1 && it.valueParameters[0].type == rhsKotlinType }
             )
         }
     }
 
-    private val unaryOperatorCache = mutableMapOf<Pair<Name, KotlinType>, IrSimpleFunctionSymbol>()
+    private val unaryOperatorCache = mutableMapOf<Pair<Name, IrType>, IrSimpleFunctionSymbol>()
 
-    fun getUnaryOperator(name: Name, receiverType: KotlinType): IrSimpleFunctionSymbol {
+    @OptIn(ObsoleteDescriptorBasedAPI::class)
+    fun getUnaryOperator(name: Name, receiverType: IrType): IrSimpleFunctionSymbol {
         val key = name to receiverType
         return unaryOperatorCache.getOrPut(key) {
             symbolTable.referenceSimpleFunction(
-                receiverType.memberScope.getContributedFunctions(name, NoLookupLocation.FROM_BACKEND)
+                receiverType.toKotlinType().memberScope.getContributedFunctions(name, NoLookupLocation.FROM_BACKEND)
                     .first { it.valueParameters.isEmpty() }
             )
         }
     }
 
-    val intAnd = getBinaryOperator(OperatorNameConventions.AND, builtIns.intType, builtIns.intType)
-    val intPlusInt = getBinaryOperator(OperatorNameConventions.PLUS, builtIns.intType, builtIns.intType)
+    val intAnd = getBinaryOperator(OperatorNameConventions.AND, irBuiltIns.intType, irBuiltIns.intType)
+    val intPlusInt = getBinaryOperator(OperatorNameConventions.PLUS, irBuiltIns.intType, irBuiltIns.intType)
 
     open fun functionN(n: Int): IrClassSymbol = irBuiltIns.function(n)
     open fun suspendFunctionN(n: Int): IrClassSymbol = irBuiltIns.suspendFunction(n)
